@@ -159,7 +159,6 @@ class Decoder(nn.Module):
       return DecoderLayer
     elif self.config.decoder_block == "llama2":
       from layers import llama2
-
       return llama2.LlamaDecoderLayer
     elif self.config.decoder_block == "mistral":
       # TODO(ranran): update to Mistral with sliding window attention
@@ -208,6 +207,7 @@ class Decoder(nn.Module):
     if cfg.use_untrainable_positional_embedding:
       y = PositionalEmbedding(cfg.base_emb_dim)(y, decoder_positions)
 
+    # For enabling gpt3 position embedding
     if cfg.trainable_position_size > 0:
       y += Embed(
           num_embeddings=cfg.trainable_position_size,
@@ -218,8 +218,10 @@ class Decoder(nn.Module):
           config=cfg,
       )(decoder_positions)
 
+    # get_decoder_layer returns llama2.LlamaDecoderLayer
     BlockLayer = self.get_decoder_layer()
 
+    # base remat_policy is "full", and policy will be ste to None
     if cfg.remat_policy != "none":
       if cfg.remat_policy == "minimal":
         policy = jax.checkpoint_policies.checkpoint_dots_with_no_batch_dims
@@ -266,6 +268,9 @@ class Decoder(nn.Module):
       else:
         assert cfg.remat_policy == "full", "Remat policy needs to be on list of remat policies"
         policy = None
+
+      # remat returns A wrapped version of target. When computing gradients intermediate computations will be re-computed on the backward pass.
+      # https://flax.readthedocs.io/en/v0.5.3/_autosummary/flax.linen.remat.html
       BlockLayer = nn.remat(  # pylint: disable=invalid-name
           BlockLayer,
           prevent_cse=not cfg.scan_layers,
@@ -346,6 +351,9 @@ class Decoder(nn.Module):
 
 
 class Transformer(nn.Module):
+  """
+  All Flax Modules are Python 3.7 dataclasses. Since dataclasses take over __init__, you should instead override setup(), which is automatically called to initialize the module.
+  """
   """An decoder-only Transformer model."""
 
   # Make new attributes required, so that all Transformer dependencies (train, decode, compile, etc) will error instead of silently use defaults.
@@ -359,6 +367,8 @@ class Transformer(nn.Module):
 
     cfg = self.config
     mesh = self.mesh
+
+
     self.shared_embedding = Embed(
         num_embeddings=cfg.vocab_size,
         features=cfg.emb_dim,

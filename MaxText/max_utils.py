@@ -332,6 +332,9 @@ def create_device_mesh(config, devices=None):
     dcn_parallelism = fill_unspecified_mesh_axes(dcn_parallelism, num_slices, "DCN")
     mesh = mesh_utils.create_hybrid_device_mesh(ici_parallelism, dcn_parallelism, devices)
   else:
+    # returns A np.ndarray of JAX devices with mesh_shape as its shape that can be fed into jax.sharding.Mesh with good collective performance.
+    # pass in mesh_shape, an list of ints (with dimensions in order of network intensity( such as replicas, data, model)
+    # pass in devices (device names i think)
     mesh = mesh_utils.create_device_mesh(ici_parallelism, devices)
 
   max_logging.log(f"Num_devices: {num_devices}, shape {mesh.shape}")

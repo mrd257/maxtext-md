@@ -225,6 +225,8 @@ class AttentionOp(nn.Module):
           block_kv_dq=min(512, query.shape[2]),
       )
 
+      #from jax.experimental.pallas.ops.tpu.splash_attention import splash_attention_mask
+      # instantiates a CausalMask object
       masks = [splash_attention_mask.CausalMask(shape=(query.shape[2], query.shape[2])) for i in range(query.shape[1])]
       multi_head_mask = splash_attention_mask.MultiHeadMask(masks=masks)
       splash_kernel = splash_attention_kernel.make_splash_mha(

@@ -216,6 +216,7 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
     for k, v in data.items():
       data[k] = v[: config.global_batch_size_to_train_on, :]
 
+  # applies the __call_ method
   logits, intermediate_outputs = model.apply(
       params,
       data["inputs"],
@@ -338,7 +339,7 @@ def setup_mesh_and_model(config):
     tx:
   """
 
-  init_rng = random.PRNGKey(config.init_weights_seed)
+  init_rng = random.PRNGKey(config.init_weights_seed) #im guessing init random number generator
   writer = max_utils.initialize_summary_writer(config)
   logger = checkpointing.setup_checkpoint_logger(config)
   checkpoint_manager = checkpointing.create_orbax_checkpoint_manager(
@@ -351,11 +352,19 @@ def setup_mesh_and_model(config):
   )
   # Mesh definition
   devices_array = max_utils.create_device_mesh(config)
-  mesh = Mesh(devices_array, config.mesh_axes)
+  mesh = Mesh(devices_array, config.mesh_axes) #mesh axes ['data', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'autoregressive']
+  """
+  Mesh:
+  devices (ndarray) – A NumPy ndarray object containing JAX device objects (as obtained e.g. from jax.devices()).
+  axis_names (tuple[Any, ...]) – A sequence of resource axis names to be assigned to the dimensions of the devices argument. Its length should match the rank of devices.
+  """
+
 
   # Model and Optimizer definition
   quant = quantizations.configure_quantization(config)
+
   model = Transformer(config, mesh, quant=quant)
+
   learning_rate_schedule = max_utils.create_learning_rate_schedule(config)
   tx = optimizers.get_optimizer(config, learning_rate_schedule)
   return init_rng, writer, checkpoint_manager, mesh, model, learning_rate_schedule, tx
@@ -428,6 +437,8 @@ def train_loop(config, state=None):
       state,
   ) = setup_train_loop(config)
   # pylint: disable=line-too-long
+
+  # train step is a function
   (
       functional_train,
       in_shard_train,
@@ -473,6 +484,7 @@ def train_loop(config, state=None):
     )
 
     if eval_data_iterator:
+      # jit returns a wrapped version of the function set up for jit compilation
       p_eval_step = jax.jit(
           functional_eval,
           in_shardings=in_shard_eval,
@@ -495,6 +507,7 @@ def train_loop(config, state=None):
   example_batch = None
   last_step_completion = datetime.datetime.now()
   prof = profiler.Profiler(config)
+  # the training loop?
   for step in np.arange(start_step, config.steps):
     if step == first_profiling_step:
       prof.activate()
@@ -549,6 +562,7 @@ def train_loop(config, state=None):
 
 
 def main(argv: Sequence[str]) -> None:
+    # Configuration
   jax.config.update("jax_default_prng_impl", "unsafe_rbg")
   os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
   os.environ["LIBTPU_INIT_ARGS"] = os.environ.get("LIBTPU_INIT_ARGS", "") + " --xla_tpu_spmd_rng_bit_generator_unsafe=true"
@@ -573,4 +587,6 @@ def main(argv: Sequence[str]) -> None:
 
 
 if __name__ == "__main__":
-  app.run(main)
+    # from absl import app
+    #
+    app.run(main)
