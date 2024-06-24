@@ -50,8 +50,8 @@ requisition_resources(){
 
     # Loop until the status is ACTIVE"
     while true; do
+        # status=$(gcloud compute tpus queued-resources list --filter=name=${QUEUED_RESOURCE_NAME} | awk 'NR==2 {print $5}')
         status=$(gcloud compute tpus queued-resources list --filter=name=${QUEUED_RESOURCE_NAME} | awk 'NR=2 {print $5}')
-        # Check if the output contains "Active"
         if echo "$status" | grep -q "ACTIVE"; then
             echo "Command output is active. Proceeding to next command."
             break
@@ -59,7 +59,6 @@ requisition_resources(){
             echo $status
             echo "Waiting for host to become active..."
         fi
-        # Wait 2 seconds before checking again
         sleep 5
     done
 }
@@ -68,3 +67,8 @@ release_resources(){
     gcloud alpha compute tpus tpu-vm delete ${TPU_NAME} --project=${PROJECT_ID} --zone=${ZONE} --quiet
     gcloud compute tpus queued-resources delete ${TPU_NAME}
 }
+
+ssh_to_host(){
+    gcloud alpha compute tpus tpu-vm ssh $TPU_NAME --zone=$ZONE  --internal-ip        
+}
+

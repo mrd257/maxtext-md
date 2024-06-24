@@ -15,7 +15,7 @@
 set -ex
 MODEL_VARIATION='llama3-70b'
 
-conda activate convert-checkpoint
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # We define a var for the path to the Meta checkpoint. Non-Googlers please remember to update the source `META_CHECKPOINT_PATH` to the GCS bucket where you have your Meta checkpoint
 export META_CHECKPOINT_PATH=gs://scit1565-pedsllm-b5-def/Meta-Llama-3-70B-Instruct/
