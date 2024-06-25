@@ -1,3 +1,5 @@
+#!/usr/bin/env -S conda run --no-capture-output -n convert-checkpoint python
+
 """
 Copyright 2023 Google LLC
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -133,14 +135,24 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
 
   print(f"Loading the base model from {base_model_path}")
   # Skip any hidden files for checkpoints
-  ckpt_paths = sorted(pathlib.Path(base_model_path).glob("[!.]*.pth"))
+  print('base_model_path', base_model_path)
+  print('path is', pathlib.Path(base_model_path))
+  
+
+  # Get all .pth files in the directory
+  ckpt_paths = pathlib.Path(base_model_path).glob("*.pth")
+
+  # Filter out files that start with a dot
+  ckpt_paths = [path for path in ckpt_paths if not path.name.startswith('.')]
+  print('length of ckpt paths', len(ckpt_paths))
+  #ckpt_paths = sorted(pathlib.Path(base_model_path).glob("[!.]*.pth"))
   pytorch_vars = {}
   for i, ckpt_path in enumerate(ckpt_paths):
     print(f"Loading checkpoint {i+1} of {len(ckpt_paths)} ...")
     checkpoint = torch.load(ckpt_path, map_location="cpu")
     pytorch_vars[int(ckpt_path.name.split(".", maxsplit=2)[1])] = checkpoint
   pytorch_vars = [pytorch_vars[i] for i in sorted(list(pytorch_vars.keys()))]
-
+  print('length of pytorch_vars', len(pytorch_vars))
   if num_experts:
     layer_key = "MoeBlock_0" if moe_matmul else "gate"
   else:
@@ -379,6 +391,7 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
   )
 
   if checkpoint_manager is not None:
+    print('checkpoint block')
     if save_checkpoint(checkpoint_manager, step_number_to_save_new_ckpt, state_new):
       max_logging.log(f"saved a checkpoint at step {step_number_to_save_new_ckpt}")
     # Upon preemption, exit when and only when all ongoing saves are complete.
@@ -400,5 +413,5 @@ if __name__ == "__main__":
     raise NotImplementedError
 
   os.environ["XLA_FLAGS"] = f"--xla_force_host_platform_device_count={SIMULATED_CPU_DEVICES_COUNT}"
-
+  print('base_model_path', args.base_model_path)
   convert(args.base_model_path, args.maxtext_model_path, args.model_size, args.moe_matmul)

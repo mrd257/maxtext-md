@@ -14,6 +14,17 @@ export_single_host_envs(){
     export QUEUED_RESOURCE_NAME=projects/scit1565-pedsllm-b5/locations/us-central1-a/queuedResources/donatim-v5litepod-8
 }
 
+export_cpu_envs(){
+    # be sure to change user id in TPU_NAME 
+    export PROJECT_ID=scit1565-pedsllm-b5 
+    export ZONE=us-central1-a 
+    export SERVICE_ACCOUNT=scit1565-pedsllm-b5@scit1565-pedsllm-b5.iam.gserviceaccount.com 
+    export QUEUED_RESOURCE_ID=donatim-n1-highmem-20
+    export NETWORK=projects/arcus-vpc-master/global/networks/arcus-master-vpc	\
+    export SUBNETWORK=projects/arcus-vpc-master/regions/us-central1-a/subnetworks/scit1565-pedsllm-b5-central1
+    export QUEUED_RESOURCE_NAME=projects/scit1565-pedsllm-b5/locations/us-central1-a/queuedResources/${QUEUED_RESOURCE_ID}
+}
+
 export_multihost_16_envs(){
     export PROJECT_ID=scit1565-pedsllm-b5 
     export ACCELERATOR_TYPE=v5litepod-16
@@ -61,6 +72,25 @@ requisition_resources(){
         fi
         sleep 5
     done
+}
+
+requisition_cpu_resources(){
+    if [[ "$#" -eq 1 && "$1" == "--best-effort" ]]; then 
+        best_effort_flag="$1"
+    fi
+    echo $best_effort_flag
+    gcloud config set project $PROJECT_ID --quiet
+    gcloud config set compute/zone $ZONE --quiet
+
+    gcloud alpha compute queued-resources create ${QUEUED_RESOURCE_ID} \
+        --project ${PROJECT_ID} \
+        --network ${NETWORK} \
+        --zone ${ZONE} \
+        --machine-type n1-highmem-20 \
+        --service-account ${SERVICE_ACCOUNT} \
+        ${best_effort_flag:+"$best_effort_flag"}
+
+    
 }
 
 release_resources(){

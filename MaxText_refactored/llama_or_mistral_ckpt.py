@@ -58,40 +58,7 @@ MODEL_PARAMS_DICT = {
         "num_kv_heads": 8,
         "dims_per_head": 128,
         "vocab": 32000,
-    },
-    "llama2-13b": {
-        "num_layers": 40,
-        "num_heads": 40,
-        "num_kv_heads": 40,
-        "dims_per_head": 128,
-        "vocab": 32000,
-    },
-    "llama2-7b": {
-        "num_layers": 32,
-        "num_heads": 32,
-        "num_kv_heads": 32,
-        "dims_per_head": 128,
-        "vocab": 32000,
-    },
-    "mistral-7b": {
-        "num_layers": 32,
-        "num_heads": 32,
-        "num_kv_heads": 8,
-        "dims_per_head": 128,
-        "vocab": 32000,
-        "base_emb_dim": 4096,
-        "base_mlp_dim": 14336,
-    },
-    "mixtral-8x7b": {
-        "num_layers": 32,
-        "num_heads": 32,
-        "num_kv_heads": 8,
-        "dims_per_head": 128,
-        "vocab": 32000,
-        "base_emb_dim": 4096,
-        "base_mlp_dim": 14336,
-        "num_experts": 8,
-    },
+    }
 }
 
 SIMULATED_CPU_DEVICES_COUNT = 16
@@ -115,7 +82,6 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
   head_dim = model_params["dims_per_head"]
   base_num_kv_heads = model_params["num_kv_heads"]
   vocab_size = model_params["vocab"]
-  num_experts = model_params["num_experts"] if "num_experts" in model_params else None
 
   print(f"Loading the base model from {base_model_path}")
   # Skip any hidden files for checkpoints
@@ -127,10 +93,7 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
     pytorch_vars[int(ckpt_path.name.split(".", maxsplit=2)[1])] = checkpoint
   pytorch_vars = [pytorch_vars[i] for i in sorted(list(pytorch_vars.keys()))]
 
-  if num_experts:
-    layer_key = "MoeBlock_0" if moe_matmul else "gate"
-  else:
-    layer_key = "mlp"
+  layer_key = "mlp"
   jax_weights = {
       "decoder": {
           "layers": {
@@ -155,26 +118,12 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
 
   layer_weight = {"pre_self_attention_layer_norm": {"scale": []}, "post_self_attention_layer_norm": {"scale": []}}
 
-  if num_experts is None:
-    layer_weight["mlp"] = {
-        "wi_0": {"kernel": []},
-        "wi_1": {"kernel": []},
-        "wo": {"kernel": []},
+  layer_weight["mlp"] = {
+      "wi_0": {"kernel": []},
+      "wi_1": {"kernel": []},
+      "wo": {"kernel": []},
     }
-  else:
-    layer_weight["gate"] = {"kernel": []}
-
-    for k in range(num_experts):
-      if moe_matmul:
-        jax_weights["decoder"]["layers"]["MoeBlock_0"]["gate"] = {}
-      else:
-        jax_weights["decoder"]["layers"][f"mlp_{k}"] = {}
-      layer_weight[f"mlp_{k}"] = {
-          "wi_0": {"kernel": []},
-          "wi_1": {"kernel": []},
-          "wo": {"kernel": []},
-      }
-
+  
   self_attention = {
       "query": {"kernel": []},
       "key": {"kernel": []},
@@ -215,50 +164,20 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
     layer_weight["pre_self_attention_layer_norm"]["scale"].append(pre_self_attention_layernorm)
     layer_weight["post_self_attention_layer_norm"]["scale"].append(post_self_attention_layernorm)
 
-    if num_experts is None:
-      wi_0 = np.concatenate(
-          [var[f"layers.{layer_idx}.feed_forward.w1.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=0
-      ).transpose()
-      wi_1 = np.concatenate(
-          [var[f"layers.{layer_idx}.feed_forward.w3.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=0
-      ).transpose()
-      wo = np.concatenate(
-          [var[f"layers.{layer_idx}.feed_forward.w2.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=1
-      ).transpose()
-      layer_weight["mlp"]["wi_0"]["kernel"].append(wi_0)
-      layer_weight["mlp"]["wi_1"]["kernel"].append(wi_1)
-      layer_weight["mlp"]["wo"]["kernel"].append(wo)
-    else:
-      gate = np.concatenate(
-          [var[f"layers.{layer_idx}.feed_forward.gate.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=0
-      ).transpose()
-      layer_weight["gate"]["kernel"].append(gate)
-      for k in range(num_experts):
-        wi_0 = np.concatenate(
-            [
-                var[f"layers.{layer_idx}.feed_forward.experts.{k}.w1.weight"].type(torch.float16).numpy()
-                for var in pytorch_vars
-            ],
-            axis=0,
-        ).transpose()
-        wi_1 = np.concatenate(
-            [
-                var[f"layers.{layer_idx}.feed_forward.experts.{k}.w3.weight"].type(torch.float16).numpy()
-                for var in pytorch_vars
-            ],
-            axis=0,
-        ).transpose()
-        wo = np.concatenate(
-            [
-                var[f"layers.{layer_idx}.feed_forward.experts.{k}.w2.weight"].type(torch.float16).numpy()
-                for var in pytorch_vars
-            ],
-            axis=1,
-        ).transpose()
-        layer_weight[f"mlp_{k}"]["wi_0"]["kernel"].append(wi_0)
-        layer_weight[f"mlp_{k}"]["wi_1"]["kernel"].append(wi_1)
-        layer_weight[f"mlp_{k}"]["wo"]["kernel"].append(wo)
-
+    
+    wi_0 = np.concatenate(
+        [var[f"layers.{layer_idx}.feed_forward.w1.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=0
+    ).transpose()
+    wi_1 = np.concatenate(
+        [var[f"layers.{layer_idx}.feed_forward.w3.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=0
+    ).transpose()
+    wo = np.concatenate(
+        [var[f"layers.{layer_idx}.feed_forward.w2.weight"].type(torch.float16).numpy() for var in pytorch_vars], axis=1
+    ).transpose()
+    layer_weight["mlp"]["wi_0"]["kernel"].append(wi_0)
+    layer_weight["mlp"]["wi_1"]["kernel"].append(wi_1)
+    layer_weight["mlp"]["wo"]["kernel"].append(wo)
+    
   self_attention["query"]["kernel"] = np.array(self_attention["query"]["kernel"])
   self_attention["key"]["kernel"] = np.array(self_attention["key"]["kernel"])
   self_attention["value"]["kernel"] = np.array(self_attention["value"]["kernel"])
@@ -298,39 +217,7 @@ def convert(base_model_path, maxtext_model_path, model_size, moe_matmul):
     layer_weight["mlp"]["wo"]["kernel"] = np.transpose(layer_weight["mlp"]["wo"]["kernel"], axes=(1, 0, 2))
 
     jax_weights["decoder"]["layers"]["mlp"] = layer_weight["mlp"]
-  else:
-    layer_weight["gate"]["kernel"] = np.array(layer_weight["gate"]["kernel"])
-    layer_weight["gate"]["kernel"] = np.transpose(layer_weight["gate"]["kernel"], axes=(1, 0, 2))
-    if moe_matmul:
-      jax_weights["decoder"]["layers"]["MoeBlock_0"]["gate"]["kernel"] = layer_weight["gate"]["kernel"]
-      all_wi_0 = []
-      all_wi_1 = []
-      all_wo = []
-    else:
-      jax_weights["decoder"]["layers"]["gate"] = layer_weight["gate"]
-
-    for k in range(num_experts):
-      layer_weight[f"mlp_{k}"]["wi_0"]["kernel"] = np.array(layer_weight[f"mlp_{k}"]["wi_0"]["kernel"])
-      layer_weight[f"mlp_{k}"]["wi_1"]["kernel"] = np.array(layer_weight[f"mlp_{k}"]["wi_1"]["kernel"])
-      layer_weight[f"mlp_{k}"]["wo"]["kernel"] = np.array(layer_weight[f"mlp_{k}"]["wo"]["kernel"])
-
-      if moe_matmul:
-        all_wi_0.append(layer_weight[f"mlp_{k}"]["wi_0"]["kernel"])
-        all_wi_1.append(layer_weight[f"mlp_{k}"]["wi_1"]["kernel"])
-        all_wo.append(layer_weight[f"mlp_{k}"]["wo"]["kernel"])
-      else:
-        # swap the layer index
-        layer_weight[f"mlp_{k}"]["wi_0"]["kernel"] = np.transpose(layer_weight[f"mlp_{k}"]["wi_0"]["kernel"], axes=(1, 0, 2))
-        layer_weight[f"mlp_{k}"]["wi_1"]["kernel"] = np.transpose(layer_weight[f"mlp_{k}"]["wi_1"]["kernel"], axes=(1, 0, 2))
-        layer_weight[f"mlp_{k}"]["wo"]["kernel"] = np.transpose(layer_weight[f"mlp_{k}"]["wo"]["kernel"], axes=(1, 0, 2))
-
-        jax_weights["decoder"]["layers"][f"mlp_{k}"] = layer_weight[f"mlp_{k}"]
-
-    if moe_matmul:
-      jax_weights["decoder"]["layers"]["MoeBlock_0"]["wi_0"] = np.array(all_wi_0)
-      jax_weights["decoder"]["layers"]["MoeBlock_0"]["wi_1"] = np.array(all_wi_1)
-      jax_weights["decoder"]["layers"]["MoeBlock_0"]["wo"] = np.array(all_wo)
-
+  
   mesh = jax.sharding.Mesh(jax.devices(), "checkpoint_sharding_axis")
   s1 = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("checkpoint_sharding_axis"))  # shards first axis
   s2 = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec(None, "checkpoint_sharding_axis"))  # shards second axis
