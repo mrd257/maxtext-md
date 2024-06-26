@@ -61,6 +61,13 @@ save_config_to_gcs: False
 dtype: "bfloat16"
 quantization: "" #defaults to no quantization, i.e. bf16. possible alternative setting is 'int8' or use fp8 to run with 8-bit floating-point GeMMs on NVIDIA GPUs.
 quantize_kvcache: False
+# Valid kv_quant_axis values:
+#   - "" is valid only when quantize_kvcache is False
+#   - "dkv" indicates quantize kv cache over the cache_kv, i.e. kv dimension axis
+#   - "heads_and_dkv" indicates quantize kv cache over cache_heads and cache_kv axes
+# Default to "heads_and_dkv" for faster compution, kv_quant_axis is not used when quantize_kvcache is False
+#   - "dkv" is expected with better accuracy but degraded computation 
+kv_quant_axis: "heads_and_dkv"
 
 # Shard the range finding operation for quantization. By default this is set to number of slices.
 quantization_local_shard_count: -1
@@ -128,7 +135,7 @@ jax_cache_dir: "~/jax_cache"
 hardware: 'tpu' # Supported hardware types are 'tpu', 'gpu', 'gpu_multiprocess' and 'cpu'
 
 # Parallelism
-mesh_axes: ['stage', 'data', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'autoregressive']
+mesh_axes: ['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'autoregressive']
 logical_axis_rules: [
                       ['activation_batch', ['data', 'fsdp', 'fsdp_transpose',]],
                        # For pipeline parallelism the pre and post decoder layer tensors' batch dimension is sharded by stages.
@@ -163,7 +170,7 @@ logical_axis_rules: [
                       ['cache_sequence', []],
                     ]
 # Axes used for DCN must be earlier in this list than ICI, see (b/339009148) for details
-data_sharding: [['stage', 'data', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'autoregressive']]
+data_sharding: [['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'autoregressive']]
 
 # One axis for each parallelism type may hold a placeholder (-1)
 # value to auto-shard based on available slices and devices.
@@ -316,6 +323,7 @@ inference_microbenchmark_prefill_lengths: "64,128,256,512,1024"
 inference_microbenchmark_stages: "prefill,generate"
 inference_microbenchmark_loop_iters: 10
 inference_microbenchmark_log_file_path: ""
+inference_metadata_file: "" # path to a json file
 
 # KV Cache layout control
 # Logical layout: 0,1,2,3 ; CACHE_BATCH, CACHE_SEQUENCE, CACHE_HEADS, CACHE_KV
