@@ -18,10 +18,10 @@ MODEL_VARIATION='llama3-70b'
 export BASE_OUTPUT_PATH=gs://scit1565-pedsllm-b5-def
 
 # We define `CONVERTED_CHECKPOINT` to refer to the checkpoint subdirectory.
-export CONVERTED_CHECKPOINT=${BASE_OUTPUT_PATH}/${MODEL_VARIATION}/scanned_chkpt/0/items
+export CONVERTED_CHECKPOINT=gs://scit1565-pedsllm-b5-def/llama3-70b/scanned_chkpt/0/items
 # Note that the `CONVERTED_CHECKPOINT` is in a `scanned` format which is great for training but for efficient decoding performance we want the checkpoint in an `unscanned` format.
 # We can do this by running `MaxText/generate_param_only_checkpoint.py` on `CONVERTED_CHECKPOINT` with `force_unroll=true`. 
 export RUN_NAME=unscanned_chkpt
 export JAX_PLATFORMS=cpu
-conda run --no-capture-output -n convert-checkpoint /home/donatim/maxtext-md/MaxText/generate_param_only_checkpoint.py /home/donatim/maxtext-md/MaxText/configs/base.yml async_checkpointing=false base_output_directory=${BASE_OUTPUT_PATH} load_parameters_path=${CONVERTED_CHECKPOINT} run_name=${RUN_NAME} model_name=${MODEL_VARIATION} force_unroll=true
+conda run --no-capture-output -n convert-checkpoint python /home/donatim/maxtext-md/MaxText/generate_param_only_checkpoint.py /home/donatim/maxtext-md/MaxText/configs/base.yml async_checkpointing=false base_output_directory=gs://scit1565-pedsllm-b5-def load_parameters_path=gs://scit1565-pedsllm-b5-def/llama3-70b/scanned_chkpt/0/items run_name=unscan70b model_name='llama3-70b' force_unroll=true
 
