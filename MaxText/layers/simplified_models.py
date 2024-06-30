@@ -415,7 +415,6 @@ class Transformer(nn.Module):
         config=cfg,
     )
 
-    
 
     #self.decoder = Decoder(config=cfg, shared_embedding=self.shared_embedding, mesh=mesh, quant=self.quant)
 
