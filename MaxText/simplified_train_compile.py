@@ -121,9 +121,9 @@ def jit_and_compile(
     lowered = jitted.lower(*func_input_args, **func_input_kwargs)
   #print("COST ANALYSIS", lowered.cost_analysis, flush=True)
   print('stable hlo object', type(lowered.compiler_ir("stablehlo")), flush=True)
-  print('compiler ir hlo', lowered.compiler_ir("stablehlo"), flush=True)
-  print('type of ext executable', type(lowered.xla_extension_executable()), flush=True)
-  print('ext executable', lowered.xla_extension_executable(), flush=True)
+  #print('compiler ir hlo', lowered.compiler_ir("stablehlo"), flush=True)
+  #print('type of ext executable', type(lowered.xla_extension_executable()), flush=True)
+  #print('ext executable', lowered.xla_extension_executable(), flush=True)
 
   compiled = lowered.compile()
   return compiled
