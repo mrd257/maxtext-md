@@ -170,7 +170,7 @@ class AttentionOp(nn.Module):
       output_mask = causal_mask
     else:
       output_mask = None
-
+    jax.debug.print('MASK INFO', jnp.where(output_mask, 0.0, DEFAULT_MASK_VALUE) if output_mask is not None else None)
     return jnp.where(output_mask, 0.0, DEFAULT_MASK_VALUE) if output_mask is not None else None
 
   def apply_attention(self, query: Array, key: Array, value: Array, decoder_segment_ids: Array | None, model_mode: str):

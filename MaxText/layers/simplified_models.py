@@ -29,7 +29,7 @@ from layers import simplified_embeddings
 from layers import linears
 from layers import normalizations, quantizations
 from layers import pipeline
-
+from layers import llama2
 Array = common_types.Array
 Config = common_types.Config
 DType = common_types.DType
@@ -174,50 +174,23 @@ class Decoder(nn.Module):
   shared_embedding: nn.Module
   mesh: Mesh
   quant: Optional[Quant] = None
-
-  def get_decoder_layer(self):
-    if self.config.decoder_block == "default":
-      return DecoderLayer
-    elif self.config.decoder_block == "llama2":
-      from layers import llama2
-
-      return llama2.LlamaDecoderLayer
-    elif self.config.decoder_block == "mistral":
-      # TODO(ranran): update to Mistral with sliding window attention
-      from layers import mistral
-
-      return mistral.MistralDecoderLayer
-    elif self.config.decoder_block == "gemma":
-      from layers import gemma
-
-      return gemma.GemmaDecoderLayer
-    elif self.config.decoder_block == "gpt3":
-      from layers import gpt3
-
-      return gpt3.Gpt3DecoderLayer
-    elif self.config.decoder_block == "simple":
-      from layers import simple_layer
-
-      return simple_layer.SimpleDecoderLayer
-    else:
-      raise ValueError(f"Incorrect decoder_block name {self.config.decoder_block=}")
-
+ 
   def get_norm_layer(self):
-    if self.config.decoder_block in ("default", "llama2", "mistral", "gemma", "simple"):
       return RMSNorm
-    elif self.config.decoder_block == "gpt3":
-      from layers import gpt3
-
-      return functools.partial(gpt3.Gpt3LayerNorm, reductions_in_fp32=False, use_bias=True)
-    else:
-      raise ValueError(f"Incorrect decoder_block name {self.config.decoder_block=}")
 
   def scan_decoder_layers(self, cfg, decoder_layer, length, metdata_axis_name, mesh):
     initializing = self.is_mutable_collection("params")
+    # ScanIn is from flax.linen.partitioning which provides Legacy utilities for working with pjit and partitioned models.
+    #@dataclasses.dataclass(frozen=True)
+    #class In(Generic[T]):
+    #Specifies a variable collection should only be lifted as input.
+    #axis: T
     params_spec = cfg.param_scan_axis if initializing else ScanIn(cfg.param_scan_axis)
     cache_spec = 0
     scan_fn = nn.scan(
       decoder_layer,
+      # variable_axes maps variable names to axis indices. 
+      #  "params": 1, means that the second axis of the params variable corresponds to the sequence dimensio.  
       variable_axes={
           "params": params_spec,
           "cache": cache_spec,
@@ -238,6 +211,8 @@ class Decoder(nn.Module):
       length=length,
       metadata_params={nn.PARTITION_NAME: metdata_axis_name},
     )
+    # need to check this out because it looks like we are adding attributes here 
+    # Think it is just the __init__
     return scan_fn(config=cfg, mesh=mesh, name="layers", quant=self.quant)
 
   @nn.compact
@@ -258,20 +233,7 @@ class Decoder(nn.Module):
     y = nn.Dropout(rate=cfg.dropout_rate, broadcast_dims=(-2,))(y, deterministic=deterministic)
     y = y.astype(cfg.dtype)
 
-    if cfg.use_untrainable_positional_embedding:
-      y = PositionalEmbedding(cfg.base_emb_dim)(y, decoder_positions)
-
-    if cfg.trainable_position_size > 0:
-      y += Embed(
-          num_embeddings=cfg.trainable_position_size,
-          features=cfg.emb_dim,
-          dtype=cfg.dtype,
-          embedding_init=nn.initializers.normal(stddev=1.0),
-          name="position_embedder",
-          config=cfg,
-      )(decoder_positions)
-
-    BlockLayer = self.get_decoder_layer()
+    BlockLayer = llama2.LlamaDecoderLayer
 
     if cfg.remat_policy != "none":
       if cfg.remat_policy == "minimal":

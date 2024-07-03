@@ -104,3 +104,10 @@ ssh_to_host(){
     gcloud alpha compute tpus tpu-vm ssh $TPU_NAME --zone=$ZONE  --internal-ip        
 }
 
+setup_multihost(){
+    cd /home/donatim/maxtext-md
+    python3 multihost_runner.py --TPU_PREFIX=$TPU_NAME --COMMAND='
+    sudo apt update && sudo apt install -y pre-commit;
+    export PATH="/home/sa_112413943341569390945/.local/bin:$PATH";
+    bash setup.sh'
+}
