@@ -120,7 +120,7 @@ def jit_and_compile(
     )
     lowered = jitted.lower(*func_input_args, **func_input_kwargs)
   #print("COST ANALYSIS", lowered.cost_analysis, flush=True)
-  print('stable hlo object', type(lowered.compiler_ir("stablehlo")), flush=True)
+  #print('stable hlo object', type(lowered.compiler_ir("stablehlo")), flush=True)
   #print('compiler ir hlo', lowered.compiler_ir("stablehlo"), flush=True)
   #print('type of ext executable', type(lowered.xla_extension_executable()), flush=True)
   #print('ext executable', lowered.xla_extension_executable(), flush=True)
@@ -134,7 +134,21 @@ def save_compiled(compiled, save_name):
   with open(save_name, "wb") as f:
     pickle.dump(serialized, f)
 
-
+def print_pytree(pytree, depth=0):
+    indent = "  " * depth
+    if isinstance(pytree, (list, tuple)):
+        print(f"{indent}{type(pytree).__name__}[", flush=True)
+        for item in pytree:
+            print_pytree(item, depth + 1)
+        print(f"{indent}]", flush=True)
+    elif isinstance(pytree, dict):
+        print(f"{indent}{{", flush=True)
+        for key, value in pytree.items():
+            print(f"{indent}  {key}:", flush=True)
+            print_pytree(value, depth + 1)
+        print(f"{indent}}}", flush=True)
+    else:
+        print(f"{indent}{pytree}", flush=True)
 def main(argv: Sequence[str]) -> None:
   # default prng config
   jax.config.update("jax_default_prng_impl", "unsafe_rbg")
@@ -155,8 +169,13 @@ def main(argv: Sequence[str]) -> None:
   func_to_compile, in_shard, out_shard, static_argnums, donate_argnums = maxtext_utils.get_functional_train_with_signature(
       train.train_step, topology_mesh, state_mesh_annotations, model, config
   )
-  print("IN shard", in_shard, flush=True)
-  print("OUT shard", out_shard, flush=True)
+
+  
+  print_pytree(in_shard)
+  print_pytree(out_shard)
+  
+  #print("IN shard", in_shard, flush=True)
+  #print("OUT shard", out_shard, flush=True)
 
 
   # Compile
